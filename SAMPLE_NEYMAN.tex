@@ -1,0 +1,123 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{fancyhdr}
+\usepackage{lscape}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Team Neyman -- SURV 745}
+\lhead{SAMPLE\_NEYMAN}
+\cfoot{\thepage}
+
+\title{SAMPLE\_NEYMAN: Selected Sample Units for Detroit Transportation Security Survey}
+\author{Team Neyman -- SURV 745}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Sample Overview}
+
+The Detroit Transportation Security Survey employed a two-stage stratified systematic sampling design with probability proportional to size (PPS) to select 40 primary sampling units (PSUs) represented by Census tracts and 40 secondary sampling units (SSUs) represented by block groups within those tracts. The systematic PPS sampling procedure ensures that larger population units have greater probability of selection, resulting in a self-weighting sample design when implemented correctly. This approach balances operational efficiency with statistical precision in estimating transportation security outcomes across the Detroit metropolitan area.
+
+\section*{Summary Statistics}
+
+\begin{itemize}
+\item \textbf{Primary Sampling Units (PSUs):} 40 Census tracts
+\item \textbf{Secondary Sampling Units (SSUs):} 40 Block groups
+\item \textbf{Sampling Method:} Systematic probability proportional to size (PPS)
+\item \textbf{Base Weights by Stratum:}
+  \begin{itemize}
+    \item Stratum 1: $1/f_g[1] = 225.9$
+    \item Stratum 2: $1/f_g[2] = 203.9$
+    \item Stratum 3: $1/f_g[3] = 235.5$
+    \item Stratum 4: $1/f_g[4] = 228.1$
+  \end{itemize}
+\item \textbf{Average Workload per PSU:} 53.86 housing units
+\end{itemize}
+
+\clearpage
+
+\begin{landscape}
+\begin{longtable}{r|r|r|r|r|r|r|r|r|r|r|r|r|r|r}
+\caption{Selected Sample Units: 40 PSUs and 40 SSUs with Population and Age Distribution}\\
+\toprule
+\textbf{Tract FIPS} & \textbf{Block Group} & \textbf{Tot Pop} & \textbf{Adult18+} & \textbf{Age18-34} & \textbf{Age35-49} & \textbf{Age50-64} & \textbf{Age65+} & \textbf{$\pi$(Tract)} & \textbf{$\pi$(BG|Tract)} & \textbf{$\pi$(Overall)} & \textbf{$f$(18-34)} & \textbf{$f$(35-49)} & \textbf{$f$(50-64)} & \textbf{$f$(65+)} \\
+\midrule
+\endfirsthead
+\multicolumn{15}{c}{{\bfseries Table \thetable{} (continued)}}\\
+\toprule
+\textbf{Tract FIPS} & \textbf{Block Group} & \textbf{Tot Pop} & \textbf{Adult18+} & \textbf{Age18-34} & \textbf{Age35-49} & \textbf{Age50-64} & \textbf{Age65+} & \textbf{$\pi$(Tract)} & \textbf{$\pi$(BG|Tract)} & \textbf{$\pi$(Overall)} & \textbf{$f$(18-34)} & \textbf{$f$(35-49)} & \textbf{$f$(50-64)} & \textbf{$f$(65+)} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{15}{r}{\textit{Continued on next page}}\\
+\endfoot
+\bottomrule
+\endlastfoot
+26163500200 & 261635002002 & 2180 & 1480 & 538 & 394 & 347 & 201 & 0.1746 & 0.7090 & 0.1238 & 0.0358 & 0.0396 & 0.0343 & 0.0354 \\
+26163500900 & 261635009002 & 2049 & 1419 & 513 & 390 & 345 & 171 & 0.2151 & 0.5523 & 0.1188 & 0.0373 & 0.0413 & 0.0357 & 0.0369 \\
+26163501500 & 261635015003 & 1634 & 1196 & 405 & 336 & 303 & 152 & 0.2425 & 0.4130 & 0.1001 & 0.0442 & 0.0490 & 0.0424 & 0.0438 \\
+26163502600 & 261635026004 & 840 & 629 & 185 & 138 & 153 & 153 & 0.1934 & 0.2704 & 0.0523 & 0.0847 & 0.0938 & 0.0812 & 0.0838 \\
+26163503500 & 261635035001 & 1096 & 775 & 285 & 208 & 176 & 106 & 0.1619 & 0.4006 & 0.0649 & 0.0682 & 0.0756 & 0.0655 & 0.0676 \\
+26163505200 & 261635052001 & 957 & 708 & 228 & 152 & 196 & 132 & 0.1835 & 0.3204 & 0.0588 & 0.0753 & 0.0834 & 0.0722 & 0.0746 \\
+26163506200 & 261635062001 & 1814 & 1353 & 447 & 323 & 333 & 250 & 0.1128 & 1.0000 & 0.1128 & 0.0393 & 0.0435 & 0.0377 & 0.0389 \\
+26163506900 & 261635069001 & 1094 & 760 & 255 & 172 & 187 & 146 & 0.2130 & 0.2970 & 0.0632 & 0.0700 & 0.0775 & 0.0671 & 0.0693 \\
+26163509000 & 261635090004 & 433 & 338 & 94 & 94 & 84 & 66 & 0.1261 & 0.2243 & 0.0283 & 0.1565 & 0.1734 & 0.1501 & 0.1550 \\
+26163511900 & 261635119002 & 830 & 693 & 247 & 129 & 213 & 104 & 0.1095 & 0.5236 & 0.0573 & 0.0773 & 0.0856 & 0.0741 & 0.0765 \\
+26163514100 & 261635141002 & 873 & 626 & 205 & 152 & 168 & 101 & 0.1082 & 0.4818 & 0.0522 & 0.0849 & 0.0940 & 0.0814 & 0.0841 \\
+26163515700 & 261635157001 & 1766 & 1663 & 551 & 278 & 358 & 476 & 0.3630 & 0.3790 & 0.1376 & 0.0322 & 0.0357 & 0.0309 & 0.0319 \\
+26163516900 & 261635169002 & 746 & 713 & 38 & 50 & 256 & 369 & 0.1593 & 0.3633 & 0.0579 & 0.0765 & 0.0847 & 0.0733 & 0.0757 \\
+26163518000 & 261635180002 & 1839 & 1593 & 681 & 308 & 310 & 294 & 0.1675 & 0.7903 & 0.1324 & 0.0334 & 0.0370 & 0.0321 & 0.0331 \\
+26163520300 & 261635203001 & 652 & 584 & 291 & 86 & 115 & 92 & 0.2078 & 0.2325 & 0.0483 & 0.0917 & 0.1015 & 0.0879 & 0.0908 \\
+26163521900 & 261635219001 & 741 & 669 & 312 & 149 & 110 & 98 & 0.1999 & 0.2794 & 0.0559 & 0.0793 & 0.0878 & 0.0760 & 0.0785 \\
+26163523400 & 261635234001 & 1246 & 1027 & 359 & 272 & 231 & 165 & 0.1397 & 0.6149 & 0.0859 & 0.0515 & 0.0571 & 0.0494 & 0.0510 \\
+26163524300 & 261635243001 & 912 & 635 & 248 & 169 & 165 & 53 & 0.1495 & 0.3552 & 0.0531 & 0.0834 & 0.0924 & 0.0800 & 0.0826 \\
+26163525800 & 261635258002 & 1019 & 634 & 262 & 188 & 123 & 61 & 0.0960 & 0.5556 & 0.0533 & 0.0830 & 0.0920 & 0.0796 & 0.0822 \\
+26163526500 & 261635265001 & 940 & 692 & 238 & 162 & 169 & 123 & 0.1094 & 0.5270 & 0.0576 & 0.0768 & 0.0851 & 0.0737 & 0.0760 \\
+26163530900 & 261635309001 & 719 & 516 & 151 & 113 & 124 & 128 & 0.1062 & 0.4037 & 0.0429 & 0.1032 & 0.1143 & 0.0990 & 0.1022 \\
+26163532100 & 261635321002 & 1221 & 959 & 330 & 219 & 220 & 190 & 0.1484 & 0.5382 & 0.0799 & 0.0554 & 0.0614 & 0.0532 & 0.0549 \\
+26163533800 & 261635338001 & 434 & 334 & 89 & 94 & 84 & 67 & 0.1202 & 0.2325 & 0.0280 & 0.1584 & 0.1755 & 0.1519 & 0.1568 \\
+26163534800 & 261635348002 & 924 & 676 & 194 & 172 & 165 & 145 & 0.1370 & 0.4117 & 0.0564 & 0.0785 & 0.0869 & 0.0753 & 0.0777 \\
+26163535800 & 261635358002 & 792 & 566 & 159 & 127 & 180 & 100 & 0.2468 & 0.1903 & 0.0470 & 0.0943 & 0.1044 & 0.0904 & 0.0933 \\
+26163536600 & 261635366002 & 1573 & 1190 & 330 & 306 & 324 & 230 & 0.1587 & 0.6255 & 0.0993 & 0.0446 & 0.0494 & 0.0428 & 0.0442 \\
+26163537500 & 261635375003 & 1163 & 873 & 278 & 206 & 198 & 191 & 0.1657 & 0.4391 & 0.0728 & 0.0608 & 0.0674 & 0.0584 & 0.0602 \\
+26163538300 & 261635383001 & 1002 & 829 & 264 & 157 & 277 & 131 & 0.1469 & 0.4663 & 0.0685 & 0.0646 & 0.0716 & 0.0620 & 0.0640 \\
+26163538700 & 261635387002 & 1870 & 1413 & 407 & 341 & 346 & 319 & 0.2421 & 0.4863 & 0.1177 & 0.0376 & 0.0417 & 0.0361 & 0.0372 \\
+26163539200 & 261635392002 & 794 & 646 & 143 & 134 & 180 & 189 & 0.3245 & 0.1649 & 0.0535 & 0.0827 & 0.0916 & 0.0793 & 0.0819 \\
+26163539700 & 261635397001 & 2072 & 1675 & 424 & 338 & 449 & 464 & 0.1388 & 1.0000 & 0.1388 & 0.0319 & 0.0353 & 0.0306 & 0.0316 \\
+26163540500 & 261635405001 & 1397 & 1094 & 319 & 265 & 267 & 243 & 0.2140 & 0.4260 & 0.0912 & 0.0486 & 0.0538 & 0.0466 & 0.0481 \\
+26163541000 & 261635410003 & 1567 & 1116 & 406 & 269 & 254 & 187 & 0.2273 & 0.4096 & 0.0931 & 0.0475 & 0.0527 & 0.0456 & 0.0471 \\
+26163541700 & 261635417001 & 1087 & 925 & 261 & 208 & 227 & 229 & 0.1711 & 0.4495 & 0.0769 & 0.0575 & 0.0638 & 0.0552 & 0.0570 \\
+26163542400 & 261635424001 & 938 & 698 & 223 & 196 & 142 & 137 & 0.1610 & 0.3636 & 0.0585 & 0.0756 & 0.0838 & 0.0726 & 0.0749 \\
+26163543100 & 261635431002 & 1107 & 878 & 206 & 178 & 218 & 276 & 0.1591 & 0.4574 & 0.0728 & 0.0608 & 0.0674 & 0.0583 & 0.0602 \\
+26163544100 & 261635441002 & 1354 & 981 & 454 & 256 & 209 & 62 & 0.1356 & 0.6057 & 0.0822 & 0.0539 & 0.0597 & 0.0517 & 0.0534 \\
+26163545600 & 261635456003 & 1516 & 909 & 399 & 219 & 202 & 89 & 0.2787 & 0.2723 & 0.0759 & 0.0583 & 0.0646 & 0.0559 & 0.0578 \\
+26163546000 & 261635460001 & 1649 & 1114 & 414 & 306 & 242 & 152 & 0.1682 & 0.5548 & 0.0933 & 0.0474 & 0.0525 & 0.0455 & 0.0470 \\
+26163547000 & 261635470001 & 1144 & 856 & 235 & 228 & 238 & 155 & 0.2151 & 0.3322 & 0.0715 & 0.0620 & 0.0686 & 0.0594 & 0.0614 \\
+\midrule
+\textbf{Total/Mean} & & 47984 & 36435 & 12068 & 8482 & 8888 & 6997 & 0.1775 & 0.4530 & 0.0759 & 0.0676 & 0.0749 & 0.0649 & 0.0670 \\
+
+\end{longtable}
+\end{landscape}
+
+\clearpage
+
+\section*{Notes}
+
+\begin{itemize}
+\item \textbf{Tract FIPS:} Federal Information Processing Standards code for Census tract
+\item \textbf{Block Group:} Census block group identification code
+\item \textbf{Tot Pop:} Total population in the block group
+\item \textbf{Adult18+:} Population age 18 years and older
+\item \textbf{Age columns:} Count of population in specified age ranges
+\item \textbf{$\pi$(Tract):} Probability of selecting the tract in first stage
+\item \textbf{$\pi$(BG|Tract):} Conditional probability of selecting the block group given the tract was selected
+\item \textbf{$\pi$(Overall):} Overall probability of selection (product of tract and block group probabilities)
+\item \textbf{$f$ columns:} Proportion of population in each age group among adults age 18+
+\end{itemize}
+
+\end{document}
