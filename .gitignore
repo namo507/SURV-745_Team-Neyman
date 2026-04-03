@@ -7,3 +7,4 @@
 *.synctex.gz
 data_cache.pkl
 __pycache__/
+.Rproj.user
