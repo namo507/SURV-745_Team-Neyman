@@ -768,6 +768,7 @@ The final analysis data file should contain at minimum: (1) a final respondent w
 # Maps
 
 ```{r maps-prep}
+#| include: false
 mi_tracts <- tracts(state = "MI", county = "Wayne", year = 2020) |>
   st_as_sf() |>
   mutate(GEOID = as.character(GEOID))
