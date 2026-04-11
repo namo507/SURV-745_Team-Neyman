@@ -4,6 +4,8 @@
 
 This repository contains the final project materials for SURV 745: a multi-stage area probability sample design for the Detroit Transportation Security Survey.
 
+The submission-ready package is collected in [Final deliverables](Final%20deliverables/).
+
 The design targets adult residents of Detroit, Michigan and uses:
 
 - census tracts as primary sampling units (PSUs)
@@ -21,23 +23,33 @@ The project was built to satisfy three main design goals:
 ### Final report
 
 - [REPORT_NEYMAN.pdf](REPORT_NEYMAN.pdf): main written report with the full design, formulas, sample selection, anticipated precision, weighting plan, variance estimation guidance, maps, and appendices
-- [SURV745_Team_Neyman.qmd](SURV745_Team_Neyman.qmd): Quarto source used to generate the main report
+- [REPORT_NEYMANN.qmd](REPORT_NEYMANN.qmd): updated Quarto source used to generate the final report deliverable
 - [REPORT_NEYMAN.tex](REPORT_NEYMAN.tex): LaTeX output for the report
+- [SURV745_Team_Neyman.qmd](SURV745_Team_Neyman.qmd): earlier project draft kept in the repository for reference
 - [Project.pdf](Project.pdf): compiled project submission artifact included in the repository
 
 ### Frame and sample documentation
 
 - [FRAME1_NEYMAN.pdf](FRAME1_NEYMAN.pdf): tract-level frame document
-- [FRAME1_NEYMAN.tex](FRAME1_NEYMAN.tex): LaTeX source/output for the tract frame listing
+- [FRAME1_NEYMANN.Rmd](FRAME1_NEYMANN.Rmd): updated R Markdown source for the tract frame deliverable
+- [FRAME1_NEYMAN.tex](FRAME1_NEYMAN.tex): current LaTeX output for the tract frame listing
 - [FRAME2_NEYMAN.pdf](FRAME2_NEYMAN.pdf): block-group-level frame document
-- [FRAME2_NEYMAN.tex](FRAME2_NEYMAN.tex): LaTeX source/output for the block group frame listing
+- [FRAME2_NEYMANN.Rmd](FRAME2_NEYMANN.Rmd): updated R Markdown source for the block-group frame deliverable
+- [FRAME2_NEYMAN.tex](FRAME2_NEYMAN.tex): current LaTeX output for the block group frame listing
 - [SAMPLE_NEYMAN.pdf](SAMPLE_NEYMAN.pdf): selected sample listing with probabilities and person-level sampling rates
-- [SAMPLE_NEYMAN.tex](SAMPLE_NEYMAN.tex): LaTeX source/output for the sample listing
+- [SAMPLE_NEYMANN.Rmd](SAMPLE_NEYMANN.Rmd): updated R Markdown source for the selected-sample deliverable
+- [SAMPLE_NEYMAN.tex](SAMPLE_NEYMAN.tex): current LaTeX output for the sample listing
 
 ### Input data
 
 - [Census Tract FIPS Code Detroit MI.csv](Census%20Tract%20FIPS%20Code%20Detroit%20MI.csv): Detroit tract identifier list used to define the city frame
 - [Detroit MI.xlsx](Detroit%20MI.xlsx): tract- and block-group-level Census inputs used in the sample design calculations
+- [Census Tract FIPS Code Detroit MI_Updated.csv](Census%20Tract%20FIPS%20Code%20Detroit%20MI_Updated.csv): updated Detroit tract identifier list used by the final report source
+- [Detroit MI_Updated.xlsx](Detroit%20MI_Updated.xlsx): updated tract- and block-group-level Census input file used by the final report source
+
+## Final Folder
+
+- [Final deliverables](Final%20deliverables/): submission-ready folder containing the final PDFs, TeX files, renamed source files, and updated input data under the required `NEYMAN` naming
 
 ## Key Results
 
@@ -113,7 +125,7 @@ Read [REPORT_NEYMAN.pdf](REPORT_NEYMAN.pdf).
 
 ### If you want the source code and formulas
 
-Read [SURV745_Team_Neyman.qmd](SURV745_Team_Neyman.qmd).
+Read [REPORT_NEYMANN.qmd](REPORT_NEYMANN.qmd).
 
 ### If you want the tract frame
 
@@ -129,7 +141,7 @@ Read [SAMPLE_NEYMAN.pdf](SAMPLE_NEYMAN.pdf).
 
 ## Reproducibility Notes
 
-The Quarto source relies on R packages referenced in [SURV745_Team_Neyman.qmd](SURV745_Team_Neyman.qmd), including:
+The updated report and support sources rely on R packages referenced in [REPORT_NEYMANN.qmd](REPORT_NEYMANN.qmd), including:
 
 - tidyverse
 - readxl
@@ -141,7 +153,7 @@ The Quarto source relies on R packages referenced in [SURV745_Team_Neyman.qmd](S
 - ggplot2
 - glue
 
-To rebuild the main report, render the Quarto file in an R environment with those packages installed and access to the input files already stored in this repository.
+To rebuild the final deliverables, render [REPORT_NEYMANN.qmd](REPORT_NEYMANN.qmd), [FRAME1_NEYMANN.Rmd](FRAME1_NEYMANN.Rmd), [FRAME2_NEYMANN.Rmd](FRAME2_NEYMANN.Rmd), and [SAMPLE_NEYMANN.Rmd](SAMPLE_NEYMANN.Rmd) in an R environment with those packages installed and access to the updated input files already stored in this repository.
 
 ## Authors
 
@@ -151,4 +163,4 @@ To rebuild the main report, render the Quarto file in an R environment with thos
 
 ## Recommended Starting Point
 
-If you only open one file, open [REPORT_NEYMAN.pdf](REPORT_NEYMAN.pdf). It provides the clearest summary of the project motivation, sampling design, results, and supporting appendices.
+If you only open one folder, open [Final deliverables](Final%20deliverables/). If you only open one file, open [REPORT_NEYMAN.pdf](REPORT_NEYMAN.pdf). It provides the clearest summary of the project motivation, sampling design, results, and supporting appendices.
