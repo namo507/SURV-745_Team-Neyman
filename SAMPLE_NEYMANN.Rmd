@@ -1,0 +1,358 @@
+---
+title: "Selected Sample -- Census Tracts and Block Groups"
+subtitle: |
+  SURV 745 – PracTools Project  
+  Team Neyman | Detroit Transportation Security Survey
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+fontsize: 11pt
+geometry:
+  - margin=0.55in
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{tabularx}
+  - \usepackage{float}
+  - \usepackage{caption}
+  - \captionsetup[table]{skip=4pt}
+  - \usepackage{rotating}
+  - \usepackage{fancyhdr}
+  - \usepackage{makecell}
+  - \usepackage{ragged2e}
+  - \pagestyle{fancy}
+  - \fancyhf{}
+  - \rfoot{\thepage}
+  - \setlength{\headheight}{14pt}
+  - \renewcommand{\arraystretch}{1.05}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  results = "asis"
+)
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+
+df <- read.csv("SAMPLE_NEYMAN.csv", colClasses = "character") |>
+  mutate(
+    across(
+      c(TotHH, TotPerson, Adult18plus,
+        Age18to34, Age35to49, Age50to64, Age65plus,
+        select_n_18to34, select_n_35to49,
+        select_n_50to64, select_n_65plus,
+        total_selected),
+      as.integer
+    ),
+    across(
+      c(CompMOS, pi_tract, pi_bg_given_tract, pi_overall_bg,
+        f_person_18to34, f_person_35to49,
+        f_person_50to64, f_person_65plus,
+        listed_18to34, listed_35to49,
+        listed_50to64, listed_65plus, total_listed,
+        expected_resp_18to34, expected_resp_35to49,
+        expected_resp_50to64, expected_resp_65plus,
+        expected_total_resp,
+        base_wt_18to34, base_wt_35to49,
+        base_wt_50to64, base_wt_65plus,
+        expected_comp_from_select_18to34,
+        expected_comp_from_select_35to49,
+        expected_comp_from_select_50to64,
+        expected_comp_from_select_65plus,
+        expected_total_comp_from_select),
+      as.numeric
+    )
+  )
+```
+
+# Overview
+
+This file contains the **selected sample** for the Detroit Transportation Security Survey. It lists the 40 census tracts selected as PSUs at Stage 1 and the single block group selected within each tract as the SSU at Stage 2, along with the census counts, composite measures of size, inclusion probabilities at each stage, within-block-group person sampling rates by age domain, and base weights.
+
+Selection used systematic PPS sampling (`UPsystematic()` from the R `sampling` package) with `set.seed(-77)`. Tracts were sorted in ascending FIPS-code order before selection. Stage 1 inclusion probabilities were computed using `inclusionprobabilities(CompMOS, 40)`, which correctly handles certainty units. Stage 2 block group selection used PPS within each selected tract.
+
+# Summary Statistics
+
+```{r summary-stats}
+summ <- tibble(
+  Statistic = c(
+    "Selected PSUs (census tracts)",
+    "Selected SSUs (block groups)",
+    "Total persons to approach (all domains)",
+    "Expected completed interviews (all domains)",
+    "Expected completed interviews: 18-34",
+    "Expected completed interviews: 35-49",
+    "Expected completed interviews: 50-64",
+    "Expected completed interviews: 65+",
+    "Total persons to select (integer allocation)",
+    "Mean pi_tract (inclusion prob.)",
+    "Min pi_tract",
+    "Max pi_tract",
+    "Base weight: 18-34",
+    "Base weight: 35-49",
+    "Base weight: 50-64",
+    "Base weight: 65+"
+  ),
+  Value = c(
+    nrow(df),
+    nrow(df),
+    round(sum(df$total_listed), 1),
+    round(sum(df$expected_total_resp), 1),
+    round(sum(df$expected_resp_18to34), 1),
+    round(sum(df$expected_resp_35to49), 1),
+    round(sum(df$expected_resp_50to64), 1),
+    round(sum(df$expected_resp_65plus), 1),
+    sum(df$total_selected),
+    round(mean(df$pi_tract), 4),
+    round(min(df$pi_tract), 4),
+    round(max(df$pi_tract), 4),
+    round(df$base_wt_18to34[1], 1),
+    round(df$base_wt_35to49[1], 1),
+    round(df$base_wt_50to64[1], 1),
+    round(df$base_wt_65plus[1], 1)
+  )
+)
+
+kbl(
+  summ,
+  booktabs = TRUE,
+  linesep = "",
+  caption = "Summary of the Selected Sample",
+  align = c("l", "r")
+) |>
+  kable_styling(
+    latex_options = c("hold_position"),
+    font_size = 10,
+    full_width = FALSE,
+    position = "center"
+  ) |>
+  column_spec(1, width = "4.7in") |>
+  column_spec(2, width = "1.0in")
+```
+\newpage
+# Selection Probabilities and Census Counts
+```{r prob-table}
+# Selection Probabilities and Census Counts
+
+prob_df <- df |>
+  select(
+    TractFIPS, BlockGroup, TotHH, TotPerson, Adult18plus,
+    CompMOS, pi_tract, pi_bg_given_tract, pi_overall_bg
+  ) |>
+  mutate(
+    across(
+      c(CompMOS, pi_tract, pi_bg_given_tract, pi_overall_bg),
+      ~ round(as.numeric(.), 4)
+    )
+  )
+
+colnames(prob_df) <- c(
+  "Tract FIPS", "Block Group FIPS", "Tot. HH",
+  "Tot. Persons", "Adults 18+", "Comp. MOS",
+  "pi(tract)", "pi(BG|tract)", "pi(BG overall)"
+)
+
+kbl(
+  prob_df,
+  format = "latex",
+  booktabs = TRUE,
+  linesep = "",
+  escape = TRUE,
+  caption = "Selected PSUs and SSUs: Census Counts and Selection Probabilities",
+  align = "llrrrrrrr",
+  table.envir = "sidewaystable"
+) |>
+  kable_styling(
+    latex_options = c("scale_down"),
+    font_size = 8,
+    full_width = FALSE,
+    position = "center"
+  ) |>
+  column_spec(1, width = "1.6in") |>
+  column_spec(2, width = "1.7in")
+```
+\newpage
+# Person Sampling Rates and Operational Allocations
+```{r rates-table}
+
+# Person Sampling Rates and Operational Allocations
+
+rates_df <- df |>
+  select(
+    TractFIPS, BlockGroup,
+    f_person_18to34, f_person_35to49,
+    f_person_50to64, f_person_65plus,
+    select_n_18to34, select_n_35to49,
+    select_n_50to64, select_n_65plus,
+    total_selected,
+    expected_comp_from_select_18to34,
+    expected_comp_from_select_35to49,
+    expected_comp_from_select_50to64,
+    expected_comp_from_select_65plus,
+    expected_total_comp_from_select
+  ) |>
+  mutate(
+    across(
+      c(
+        f_person_18to34, f_person_35to49,
+        f_person_50to64, f_person_65plus,
+        expected_comp_from_select_18to34,
+        expected_comp_from_select_35to49,
+        expected_comp_from_select_50to64,
+        expected_comp_from_select_65plus,
+        expected_total_comp_from_select
+      ),
+      ~ round(as.numeric(.), 2)
+    )
+  )
+
+colnames(rates_df) <- c(
+  "Tract", "Block Group",
+  "f(18-34)", "f(35-49)", "f(50-64)", "f(65+)",
+  "n(18-34)", "n(35-49)", "n(50-64)", "n(65+)",
+  "Total n",
+  "Exp(18-34)", "Exp(35-49)",
+  "Exp(50-64)", "Exp(65+)", "Exp Total"
+)
+
+kbl(
+  rates_df,
+  format = "latex",
+  booktabs = TRUE,
+  linesep = "",
+  escape = TRUE,
+  caption = "Within-Block-Group Person Sampling Rates, Integer Allocations, 
+  and Expected Completes",
+  align = c("l", "l", rep("r", 14)),
+  table.envir = "sidewaystable"
+) |>
+  add_header_above(
+    c(
+      " " = 2,
+      "Sampling Rate" = 4,
+      "Persons to Select" = 5,
+      "Expected Completes" = 5
+    )
+  ) |>
+  kable_styling(
+    latex_options = c("scale_down"),
+    font_size = 7,
+    full_width = FALSE,
+    position = "center"
+  ) |>
+  column_spec(1, width = "1.15in") |>
+  column_spec(2, width = "1.3in")
+```
+
+\newpage
+
+# Base Weights
+
+```{r weights-table}
+wt_df <- tibble(
+  `Age Group` = c("18-34", "35-49", "50-64", "65+"),
+  `Sampling Fraction` = round(
+    c(
+      df$f_person_18to34[1] * df$pi_overall_bg[1],
+      df$f_person_35to49[1] * df$pi_overall_bg[1],
+      df$f_person_50to64[1] * df$pi_overall_bg[1],
+      df$f_person_65plus[1] * df$pi_overall_bg[1]
+    ),
+    6
+  ),
+  `Base Weight` = round(
+    c(
+      df$base_wt_18to34[1], df$base_wt_35to49[1],
+      df$base_wt_50to64[1], df$base_wt_65plus[1]
+    ),
+    1
+  )
+)
+
+kbl(
+  wt_df,
+  booktabs = TRUE,
+  linesep = "",
+  caption = "Base Weights by Age Domain",
+  align = c("l", "r", "r")
+) |>
+  kable_styling(
+    latex_options = c("hold_position"),
+    font_size = 10,
+    full_width = FALSE,
+    position = "center"
+  )
+```
+
+# Variable Descriptions
+
+```{r var-desc}
+var_desc <- tibble(
+  Variable = c(
+    "Tract FIPS",
+    "Block Group FIPS",
+    "Comp. MOS",
+    "pi(tract)",
+    "pi(BG|tract)",
+    "pi(BG overall)",
+    "f(g)",
+    "n(g)",
+    "Total n",
+    "Exp(g)",
+    "Exp Total",
+    "Base Weight"
+  ),
+  Description = c(
+    "11-digit FIPS code of the selected PSU tract.",
+    "12-digit FIPS code of the selected SSU block group.",
+    "Block-group composite MOS: $\\sum_g f_g N_{gj}$.",
+    "First-stage tract inclusion probability.",
+    "Conditional second-stage BG inclusion probability.",
+    "Overall BG inclusion probability: pi(tract) $\\times$ pi(BG|tract).",
+    "Within-BG person sampling rate for domain $g$: $f_g / \\pi_{ij}^{BG}$.",
+    "Integer number of persons to select in domain $g$ (largest-remainder allocation).",
+    "Total persons to select across all domains.",
+    "Expected completed interviews from integer selections in domain $g$.",
+    "Expected total completed interviews from integer selections.",
+    "Inverse of the overall person selection probability: $1/f_g$ (constant within age domain)."
+  )
+)
+
+kbl(
+  var_desc,
+  booktabs = TRUE,
+  linesep = "",
+  longtable = TRUE,
+  escape = FALSE,
+  caption = "Variable Descriptions",
+  align = c("l", "l")
+) |>
+  kable_styling(
+    latex_options = c("repeat_header"),
+    font_size = 9,
+    full_width = FALSE,
+    position = "center"
+  ) |>
+  column_spec(1, width = "1.7in") |>
+  column_spec(2, width = "5.6in")
+```
+
+# Notes
+
+1. **Self-weighting property:** Because $\pi_{g,ij} = \pi_{ij}^{BG} \times f_{g,ij} = f_g$ for all block groups $j$, the base weight $1/f_g$ is constant within each age domain regardless of which tract or block group a respondent falls in. The design is self-weighting within each age domain.
+
+2. **Integer allocation:** The operational person counts `n(g)` are derived by a largest-remainder (Hamilton method) allocation. Each block group's proportional share of the domain-level target (for example, 714 for age 18--34) is floored, and remaining units are assigned to block groups with the largest fractional remainders. The totals sum exactly to the domain targets.
+
+3. **Base weights and nonresponse adjustment:** The base weights in this file are pre-nonresponse-adjustment weights. After data collection, a nonresponse adjustment factor should be multiplied into the base weight within cells defined by age domain and geographic adjustment class. The adjusted weights should then be calibrated to 2020 Census age-by-sex population totals.
+
+4. **Variance estimation:** For design-based variance estimation, the selected census tract (`Tract FIPS`) should be defined as the PSU. Analysts should form 20 paired variance-estimation strata by pairing adjacent tracts in the PPS-sorted order. The final analysis file must include the base weight, PSU identifier, and variance stratum variable.
+
+5. **Seed:** `set.seed(-77)` was used

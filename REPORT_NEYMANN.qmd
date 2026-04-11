@@ -1,0 +1,1048 @@
+---
+title: |
+  **Multi-Stage Area Probability Sample Design**  
+  **for the Detroit Transportation Security Survey**
+subtitle: |
+  SURV 745 – PracTools Project  
+  Team Neyman  
+  Namit Shrivastava, Nicholas Reign Lugu   |
+  @ namit507@gmail.com
+
+date: today
+date-format: "MMMM DD, YYYY"
+format:
+  pdf:
+    latex-engine: xelatex
+    number-sections: true
+    toc: true
+    fontsize: 11pt
+    geometry: margin=1in
+    linestretch: 1
+    keep-tex: false
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{longtable}
+        \usepackage{array}
+        \usepackage{float}
+        \usepackage{caption}
+        \captionsetup[table]{skip=4pt}
+        \captionsetup[figure]{skip=4pt}
+        \setlength{\parskip}{0pt}
+        \setlength{\intextsep}{6pt}
+        \usepackage{pdflscape}
+        \usepackage{fancyhdr}
+        \pagestyle{fancy}
+        \fancyhf{}
+        \rfoot{\thepage}
+        \setlength{\headheight}{14pt}
+execute:
+  echo: false
+  warning: false
+  message: false
+  fig-align: center
+  out-width: "80%"
+  fig-height: 3.8
+  fig-pos: "H"
+---
+
+```{r setup}
+library(tidyverse)
+library(readxl)
+library(sampling)
+library(knitr)
+library(kableExtra)
+library(sf)
+library(tigris)
+library(glue)
+library(scales)
+library(stringr)
+
+set.seed(-77)
+options(tigris_class = "sf")
+options(tigris_use_cache = TRUE)
+
+# ── File names ────────────────────────────────────────────────────────────────
+tract_fips_file    <- "Census Tract FIPS Code Detroit MI_Updated.csv"
+detroit_excel_file <- "Detroit MI_Updated.xlsx"
+team_name          <- "NEYMAN"
+contact_person     <- "Namit Shrivastava"
+contact_email      <- "namit507@gmail.com"
+
+# ── Project constants ─────────────────────────────────────────────────────────
+psu_n        <- 40
+ssu_per_psu  <- 1
+resp_targets <- c(`18-34` = 250, `35-49` = 250, `50-64` = 250, `65+` = 250)
+resp_rates   <- c(`18-34` = 0.35, `35-49` = 0.45, `50-64` = 0.50, `65+` = 0.65)
+
+# ── Helper functions ──────────────────────────────────────────────────────────
+kbl_pub <- function(x, caption, digits = NULL, align = NULL,
+                    font_size = 10, longtable = FALSE, escape = TRUE) {
+  kbl(x, caption = caption, booktabs = TRUE, digits = digits,
+      align = align, longtable = longtable, linesep = "",
+      escape = escape) |>
+    kable_styling(
+      latex_options = c("hold_position", "scale_down",
+                        if (longtable) "repeat_header" else NULL),
+      font_size  = font_size,
+      full_width = FALSE,
+      position   = "center"
+    )
+}
+
+fmt_num <- function(x, d = 1) formatC(x, digits = d, format = "f", big.mark = ",")
+fmt_int <- function(x)         formatC(round(x), format = "d",   big.mark = ",")
+```
+
+\newpage
+
+# Introduction
+
+This report presents the sample design for a face-to-face survey of residents of the City of Detroit, Michigan. The survey examines transportation security and transportation use. Key variables include the proportion of residents living in a vehicle-free household, the proportion whose main means of transportation is public transit, the proportion who skip going somewhere due to transportation problems, and the proportion who asked friends, family, or neighbors for transportation help in the past month.
+
+The design uses a multi-stage area probability sample in which census tracts serve as primary sampling units (PSUs), block groups (BGs) serve as secondary sampling units (SSUs), and persons are selected from area listings within sampled BGs at the final stage. The design meets a target of 1,000 responding adults, allocated equally across four age groups, while accounting for differential expected response rates. The remainder of this report describes the frame construction, selection procedures, anticipated precision, weighting plan, and variance estimation guidance.
+
+# Sample Design
+
+## Goals of the Sample Design
+
+The goals of the sample design are to: (1) select a probability sample yielding approximately 1,000 responding adults from the City of Detroit, with 250 respondents in each of four age groups (18–34, 35–49, 50–64, and 65+); (2) select 40 census tracts and, within each selected tract, 1 block group; (3) maintain a self-weighting design within each age group so that every person in a given age domain has the same overall probability of selection; and (4) achieve approximately equal field workload across selected tracts by using probabilities proportional to a composite measure of size reflecting the required age-specific sampling rates.
+
+```{r target-table}
+target_df <- tibble(
+  `Age Group`               = names(resp_targets),
+  `Target Respondents`      = unname(resp_targets),
+  `Expected Response Rate`  = unname(resp_rates)
+)
+
+kbl_pub(target_df,
+        caption = "Target Completed Interviews and Expected Response Rates",
+        digits  = c(0, 0, 2))
+```
+
+## Target Population
+
+The target population consists of all civilian, non-institutionalized persons aged 18 years and older residing in the City of Detroit, Michigan. Persons living in institutional settings are excluded because the survey is designed as a household-based face-to-face survey.
+
+## Area Sampling Frame: Units, Data Available, and Source of the Data
+
+### Data Sources
+
+The area sampling frame is constructed from two sources: (1) a file of Detroit census tract FIPS codes obtained from the City of Detroit Open Data Portal; and (2) a Detroit census data file containing tract-level and block-group-level counts from the 2020 Decennial Census Demographic and Housing Characteristics (DHC) Summary File, including total households, total persons, and age-by-sex counts from table P12.
+
+### Frame Construction
+
+```{r read-and-build-frame}
+TractFIPS <- read.csv(
+  tract_fips_file, header = TRUE,
+  col.names = c("GEOID"), colClasses = "character"
+) |>
+  mutate(GEOID = trimws(GEOID)) |>
+  filter(GEOID != "")
+
+detroit_tracts <- unique(TractFIPS$GEOID)
+
+tract_data <- read_excel(detroit_excel_file, sheet = "Tract") |>
+  mutate(Tract = as.character(Tract))
+
+bg_data <- read_excel(detroit_excel_file, sheet = "BlockGroup") |>
+  mutate(BlockGroup = as.character(BlockGroup),
+         TractFIPS  = substr(BlockGroup, 1, 11))
+
+create_age_groups <- function(df) {
+  df |>
+    mutate(
+      Age18to34  = Male18to19Yrs + Male20Yrs + Male21Yrs + Male22to24Yrs +
+                   Male25to29Yrs + Male30to34Yrs +
+                   Female18to19Yrs + Female20Yrs + Female21Yrs + Female22to24Yrs +
+                   Female25to29Yrs + Female30to34Yrs,
+      Age35to49  = Male35to39Yrs + Male40to44Yrs + Male45to49Yrs +
+                   Female35to39Yrs + Female40to44Yrs + Female45to49Yrs,
+      Age50to64  = Male50to54Yrs + Male55to59Yrs + Male60to61Yrs + Male62to64Yrs +
+                   Female50to54Yrs + Female55to59Yrs + Female60to61Yrs + Female62to64Yrs,
+      Age65plus  = Male65to66Yrs + Male67to69Yrs + Male70to74Yrs + Male75to79Yrs +
+                   Male80to84Yrs + MaleGE85Yrs +
+                   Female65to66Yrs + Female67to69Yrs + Female70to74Yrs + Female75to79Yrs +
+                   Female80to84Yrs + FemaleGE85Yrs,
+      AgeUnder18 = MaleLT5Yrs + Male5to9Yrs + Male10to14Yrs + Male15to17Yrs +
+                   FemaleLT5Yrs + Female5to9Yrs + Female10to14Yrs + Female15to17Yrs,
+      Adult18plus = Age18to34 + Age35to49 + Age50to64 + Age65plus
+    )
+}
+
+tract_data <- create_age_groups(tract_data)
+bg_data    <- create_age_groups(bg_data)
+
+tract_dedup   <- tract_data |> distinct(Tract, .keep_all = TRUE)
+initial_tracts <- nrow(tract_dedup)
+zero_pop       <- tract_dedup |> filter(Adult18plus == 0)
+small_pop      <- tract_dedup |> filter(Adult18plus > 0, Adult18plus < 50)
+tract_frame    <- tract_dedup |> filter(Adult18plus >= 50)
+final_tracts   <- nrow(tract_frame)
+removed_tracts <- initial_tracts - final_tracts
+
+bg_frame <- bg_data |> filter(TractFIPS %in% tract_frame$Tract)
+```
+
+The initial tract file is deduplicated at the tract level because some special geographic units appear more than once in the source file. Tracts with zero adult population and tracts with fewer than 50 adults are removed from the operational frame; these units are not meaningful household survey PSUs and would create unstable sampling rates and unnecessary field burden. Tracts with only one block group are retained and that single block group is automatically selected at stage 2 (conditional probability = 1.0).
+
+```{r frame-cleaning-summary}
+frame_clean_df <- tibble(
+  Step  = c("Initial tract records after deduplication",
+            "Tracts with zero adults aged 18+",
+            "Tracts with 1–49 adults aged 18+",
+            "Total tracts removed",
+            "Final tract frame",
+            "Final block group frame"),
+  Count = c(initial_tracts, nrow(zero_pop), nrow(small_pop),
+            removed_tracts, final_tracts, nrow(bg_frame))
+)
+
+kbl_pub(frame_clean_df, caption = "Summary of Frame Construction", digits = 0)
+```
+
+## Assigning Measures of Size to Units
+
+A central requirement of the design is to achieve 250 completed interviews in each age group despite differing expected response rates. For age group $g$, the required person-level sampling fraction is:
+
+$$
+f_g = \frac{n_g}{r_g N_g}
+$$
+
+where $n_g$ is the target number of completed interviews, $r_g$ is the expected response rate, and $N_g$ is the Detroit population total in age group $g$.
+
+To support both the age-group targets and approximately equal field workload, the design uses the following composite measure of size (MOS) for each unit $i$:
+
+$$
+MOS_i = \sum_{g=1}^{4} f_g\, N_{g,i}
+$$
+
+where $N_{g,i}$ is the count of persons in age group $g$ in unit $i$. This MOS reflects the expected pre-response workload implied by the differential sampling fractions required by each age domain.
+
+```{r mos-construction}
+N1 <- sum(tract_frame$Age18to34)
+N2 <- sum(tract_frame$Age35to49)
+N3 <- sum(tract_frame$Age50to64)
+N4 <- sum(tract_frame$Age65plus)
+
+f1 <- resp_targets["18-34"] / (resp_rates["18-34"] * N1)
+f2 <- resp_targets["35-49"] / (resp_rates["35-49"] * N2)
+f3 <- resp_targets["50-64"] / (resp_rates["50-64"] * N3)
+f4 <- resp_targets["65+"]   / (resp_rates["65+"]   * N4)
+
+tract_frame <- tract_frame |>
+  mutate(CompMOS = f1 * Age18to34 + f2 * Age35to49 + f3 * Age50to64 + f4 * Age65plus)
+
+bg_frame <- bg_frame |>
+  mutate(CompMOS = f1 * Age18to34 + f2 * Age35to49 + f3 * Age50to64 + f4 * Age65plus)
+
+MOS_total                  <- sum(tract_frame$CompMOS)
+expected_approaches_per_psu <- MOS_total / psu_n
+expected_completes_per_psu  <- sum(resp_targets) / psu_n
+
+mos_df <- tibble(
+  `Age Group`                = c("18–34", "35–49", "50–64", "65+"),
+  `Population Total`         = c(N1, N2, N3, N4),
+  `Target Respondents`       = 250,
+  `Expected Response Rate`   = c(0.35, 0.45, 0.50, 0.65),
+  `Required Sampling Fraction` = c(f1, f2, f3, f4)
+)
+
+kbl_pub(mos_df,
+        caption = "Age-Specific Sampling Fractions Used in the Composite MOS",
+        digits  = c(0, 0, 0, 2, 6))
+```
+
+The total composite MOS is `r fmt_num(MOS_total, 2)`. With 40 tracts selected, the design implies an expected pre-response workload of `r fmt_num(expected_approaches_per_psu, 2)` listed adults per selected tract, versus an expected `r fmt_num(expected_completes_per_psu, 1)` completed interviews per tract.
+
+```{r fig-mos-distribution, fig.cap="Distribution of the Composite MOS Across Detroit Census Tracts. The skewed distribution confirms that equal-probability selection would produce unequal workloads; PPS selection equalizes workload by giving larger tracts higher inclusion probabilities.", fig.height=3.2}
+ggplot(tract_frame, aes(x = CompMOS)) +
+  geom_histogram(bins = 35, fill = "steelblue", color = "white", linewidth = 0.3) +
+  geom_vline(aes(xintercept = mean(CompMOS), linetype = "Mean"),
+             color = "firebrick", linewidth = 0.8) +
+  geom_vline(aes(xintercept = median(CompMOS), linetype = "Median"),
+             color = "darkorange", linewidth = 0.8) +
+  scale_linetype_manual(name = NULL,
+                        values = c("Mean" = "dashed", "Median" = "dotted")) +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(breaks = scales::breaks_pretty()) +
+  labs(x = "Composite MOS", y = "Number of Tracts") +
+  theme_bw(base_size = 10) +
+  theme(legend.position = "bottom",
+        panel.grid.minor = element_blank())
+```
+
+```{r frame-descriptive-stats}
+frame_summary <- tract_frame |>
+  summarise(across(
+    c(TotPerson, TotHH, Adult18plus, Age18to34, Age35to49, Age50to64, Age65plus, CompMOS),
+    list(Mean = mean, Median = median, SD = sd, Min = min, Max = max),
+    .names = "{.col}_{.fn}"
+  ))
+
+stats_df <- tibble(
+  Variable = c("Total Persons", "Total Households", "Adults 18+",
+               "Age 18–34", "Age 35–49", "Age 50–64", "Age 65+", "Composite MOS"),
+  Mean   = c(frame_summary$TotPerson_Mean,   frame_summary$TotHH_Mean,
+             frame_summary$Adult18plus_Mean,  frame_summary$Age18to34_Mean,
+             frame_summary$Age35to49_Mean,    frame_summary$Age50to64_Mean,
+             frame_summary$Age65plus_Mean,    frame_summary$CompMOS_Mean),
+  Median = c(frame_summary$TotPerson_Median, frame_summary$TotHH_Median,
+             frame_summary$Adult18plus_Median,frame_summary$Age18to34_Median,
+             frame_summary$Age35to49_Median,  frame_summary$Age50to64_Median,
+             frame_summary$Age65plus_Median,  frame_summary$CompMOS_Median),
+  SD     = c(frame_summary$TotPerson_SD,     frame_summary$TotHH_SD,
+             frame_summary$Adult18plus_SD,    frame_summary$Age18to34_SD,
+             frame_summary$Age35to49_SD,      frame_summary$Age50to64_SD,
+             frame_summary$Age65plus_SD,      frame_summary$CompMOS_SD),
+  Min    = c(frame_summary$TotPerson_Min,    frame_summary$TotHH_Min,
+             frame_summary$Adult18plus_Min,   frame_summary$Age18to34_Min,
+             frame_summary$Age35to49_Min,     frame_summary$Age50to64_Min,
+             frame_summary$Age65plus_Min,     frame_summary$CompMOS_Min),
+  Max    = c(frame_summary$TotPerson_Max,    frame_summary$TotHH_Max,
+             frame_summary$Adult18plus_Max,   frame_summary$Age18to34_Max,
+             frame_summary$Age35to49_Max,     frame_summary$Age50to64_Max,
+             frame_summary$Age65plus_Max,     frame_summary$CompMOS_Max)
+)
+
+kbl_pub(stats_df,
+        caption = glue("Descriptive Statistics for the Detroit Tract Frame (N = {final_tracts} tracts)"),
+        digits  = 1)
+
+bg_per_tract <- bg_frame |> count(TractFIPS, name = "nBGs")
+tract_frame  <- tract_frame |>
+  left_join(bg_per_tract |> rename(Tract = TractFIPS), by = "Tract")
+
+bg_dist_df <- bg_per_tract |>
+  count(nBGs, name = "Number of Tracts") |>
+  rename(`Block Groups per Tract` = nBGs)
+
+kbl_pub(bg_dist_df,
+        caption = "Distribution of the Number of Block Groups per Tract",
+        digits  = 0)
+```
+
+The frame contains `r fmt_int(final_tracts)` operational tracts and `r fmt_int(nrow(bg_frame))` operational block groups. The tract-level composite MOS varies substantially across the city, supporting the use of PPS selection to spread the sample efficiently while preserving target age-group yields.
+
+```{r fig-age-composition, fig.cap="Age Distribution: Population Share vs. Equal Sample Allocation. Blue bars show each age group's share of the Detroit adult population; orange bars show the equal 25\\% allocation in the sample. The 18--34 group is overrepresented in the population relative to its sample share, while the 65+ group is underrepresented, motivating the use of domain-specific sampling fractions.", fig.height=3.2}
+age_dist_df <- tibble(
+  age_group  = factor(rep(c("18-34", "35-49", "50-64", "65+"), 2),
+                      levels = c("18-34", "35-49", "50-64", "65+")),
+  type       = rep(c("Population %", "Sample %"), each = 4),
+  percentage = c(
+    N1 / (N1 + N2 + N3 + N4) * 100,
+    N2 / (N1 + N2 + N3 + N4) * 100,
+    N3 / (N1 + N2 + N3 + N4) * 100,
+    N4 / (N1 + N2 + N3 + N4) * 100,
+    25, 25, 25, 25
+  )
+)
+
+ggplot(age_dist_df, aes(x = age_group, y = percentage, fill = type)) +
+  geom_col(position = position_dodge(width = 0.65), width = 0.6) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")),
+            position = position_dodge(width = 0.65),
+            vjust = -0.4, size = 2.8, fontface = "bold") +
+  scale_fill_manual(values = c("Population %" = "#4472C4", "Sample %" = "#ED7D31"),
+                    name = NULL) +
+  scale_y_continuous(limits = c(0, 40),
+                     labels = function(x) paste0(x, "%")) +
+  labs(x = "Age Group", y = "Percentage (%)",
+       title = "Age Distribution: Population vs Sample") +
+  theme_bw(base_size = 10) +
+  theme(legend.position  = "bottom",
+        panel.grid.minor = element_blank(),
+        plot.title       = element_text(face = "bold", size = 10))
+```
+
+## Could a Single Sampling Rate Meet the Age-Group Targets?
+
+A useful alternative is a design applying the same person-level sampling rate $f$ to all adults. Under this design, $f$ satisfies:
+
+$$
+f = \frac{1000}{\displaystyle\sum_g N_g\, r_g}.
+$$
+
+```{r equal-rate-analysis}
+weighted_pop <- N1 * 0.35 + N2 * 0.45 + N3 * 0.50 + N4 * 0.65
+f_equal      <- sum(resp_targets) / weighted_pop
+
+equal_rate_results <- tibble(
+  `Age Group`             = c("18–34", "35–49", "50–64", "65+"),
+  Population              = c(N1, N2, N3, N4),
+  `Exp. Response Rate`    = c(0.35, 0.45, 0.50, 0.65),
+  Target                  = 250,
+  `Exp. Respondents`      = c(f_equal * N1 * 0.35, f_equal * N2 * 0.45,
+                               f_equal * N3 * 0.50, f_equal * N4 * 0.65),
+  Difference              = c(f_equal * N1 * 0.35 - 250,
+                               f_equal * N2 * 0.45 - 250,
+                               f_equal * N3 * 0.50 - 250,
+                               f_equal * N4 * 0.65 - 250)
+)
+
+kbl_pub(equal_rate_results,
+        caption = "Expected Respondents Under a Design with the Same Sampling Rate for All Persons",
+        digits  = c(0, 0, 2, 0, 1, 1))
+```
+
+An equal-rate design would require a sampling rate of `r fmt_num(f_equal, 6)`. Its principal advantage is simplicity: it produces a fully self-weighting sample for all adults, reducing weighting variance. Its disadvantage is that it cannot meet the age-domain targets exactly. As the table and figure below show, the 35–49 group would fall materially short of 250, while the 50–64 and 65+ groups would overshoot. Because the four domain-specific targets are fixed requirements, the equal-rate design is not appropriate.
+
+```{r fig-equal-vs-domain, fig.cap="Expected Respondents Under Equal-Rate vs. Domain-Specific Sampling. The dashed line marks the 250-respondent target for each age group. The equal-rate design misses the target for the 35--49 group and overshoots for 50--64 and 65+; the domain-specific design hits 250 exactly in all groups.", fig.height=3.2}
+rate_compare_df <- tibble(
+  age_group = factor(rep(c("18-34", "35-49", "50-64", "65+"), 2),
+                     levels = c("18-34", "35-49", "50-64", "65+")),
+  design    = rep(c("Equal Rate", "Domain-Specific"), each = 4),
+  expected  = c(
+    f_equal * N1 * 0.35,
+    f_equal * N2 * 0.45,
+    f_equal * N3 * 0.50,
+    f_equal * N4 * 0.65,
+    250, 250, 250, 250
+  )
+)
+
+ggplot(rate_compare_df, aes(x = age_group, y = expected, fill = design)) +
+  geom_col(position = position_dodge(width = 0.65), width = 0.6) +
+  geom_hline(yintercept = 250, linetype = "dashed",
+             color = "gray30", linewidth = 0.7) +
+  geom_text(aes(label = round(expected, 1)),
+            position = position_dodge(width = 0.65),
+            vjust = -0.4, size = 2.8, fontface = "bold") +
+  scale_fill_manual(values = c("Equal Rate" = "#F4A582", "Domain-Specific" = "#92C579"),
+                    name = NULL) +
+  scale_y_continuous(limits = c(200, 285),
+                     oob    = scales::squish) +
+  labs(x = "Age Group", y = "Expected Respondents",
+       title = "Expected Respondents: Equal Rate vs Domain-Specific Rates") +
+  theme_bw(base_size = 10) +
+  theme(legend.position  = "bottom",
+        panel.grid.minor = element_blank(),
+        plot.title       = element_text(face = "bold", size = 10))
+```
+
+# Sample Selection
+
+## Method of Selection
+
+The sample is selected in three stages:
+
+1. **Stage 1 (PSUs):** Select 40 census tracts from the tract frame using systematic PPS sampling with the composite MOS, with the frame sorted in ascending FIPS-code order.
+2. **Stage 2 (SSUs):** Within each selected tract, select exactly 1 block group using PPS sampling with the block-group-level composite MOS. For tracts containing only one block group, that block group is selected with certainty.
+3. **Stage 3 (persons):** Within each sampled block group, list all occupied housing units and all adults aged 18+. Within each age domain, select persons at the domain-specific rate $f_{g,ij}$ required to yield the expected completed interviews.
+
+```{r select-sample}
+tract_frame <- tract_frame |>
+  arrange(Tract) |>
+  mutate(
+    pi_tract_raw = psu_n * CompMOS / sum(CompMOS),
+    # inclusionprobabilities() rescales so the vector sums to exactly psu_n,
+    # correctly handling certainty units (pi > 1) before UPsystematic.
+    pi_tract     = inclusionprobabilities(CompMOS, psu_n)
+  )
+
+selected_psu         <- UPsystematic(tract_frame$pi_tract)
+tract_frame$selected <- selected_psu
+sample_tracts        <- tract_frame |> filter(selected == 1)
+
+sample_bgs <- list()
+for (i in seq_len(nrow(sample_tracts))) {
+  tract_id      <- sample_tracts$Tract[i]
+  bgs_in_tract  <- bg_frame |> filter(TractFIPS == tract_id) |> arrange(BlockGroup)
+  n_bgs         <- nrow(bgs_in_tract)
+
+  if (n_bgs == 1) {
+    sel_bg <- bgs_in_tract
+    sel_bg$pi_bg_given_tract <- 1
+  } else {
+    tract_mos_total <- sum(bgs_in_tract$CompMOS)
+    pik_bg <- if (tract_mos_total > 0) bgs_in_tract$CompMOS / tract_mos_total
+              else rep(1 / n_bgs, n_bgs)
+    sel_ind <- UPsystematic(pik_bg)
+    sel_bg  <- bgs_in_tract[sel_ind == 1, ]
+    sel_bg$pi_bg_given_tract <- pik_bg[sel_ind == 1]
+  }
+
+  sel_bg$TractID         <- tract_id
+  sel_bg$pi_tract        <- sample_tracts$pi_tract[i]
+  sel_bg$nBGs_in_tract   <- n_bgs
+  sample_bgs[[i]]        <- sel_bg
+}
+
+sample_bgs <- bind_rows(sample_bgs) |>
+  mutate(
+    pi_overall_bg      = pi_tract * pi_bg_given_tract,
+    # f_person_g_ij = within-BG sampling rate = f_g / pi_overall_bg
+    # n_approach_g  = expected number of persons to approach in domain g
+    #               = f_person_g * N_g_ij  (workload before nonresponse)
+    f_person_18to34  = f1 / pi_overall_bg,
+    f_person_35to49  = f2 / pi_overall_bg,
+    f_person_50to64  = f3 / pi_overall_bg,
+    f_person_65plus  = f4 / pi_overall_bg,
+    listed_18to34    = f_person_18to34 * Age18to34,   # expected approaches, age 18-34
+    listed_35to49    = f_person_35to49 * Age35to49,   # expected approaches, age 35-49
+    listed_50to64    = f_person_50to64 * Age50to64,   # expected approaches, age 50-64
+    listed_65plus    = f_person_65plus * Age65plus,   # expected approaches, age 65+
+    total_listed     = listed_18to34 + listed_35to49 + listed_50to64 + listed_65plus,
+    expected_resp_18to34 = listed_18to34 * resp_rates["18-34"],
+    expected_resp_35to49 = listed_35to49 * resp_rates["35-49"],
+    expected_resp_50to64 = listed_50to64 * resp_rates["50-64"],
+    expected_resp_65plus = listed_65plus * resp_rates["65+"],
+    expected_total_resp  = expected_resp_18to34 + expected_resp_35to49 +
+                           expected_resp_50to64  + expected_resp_65plus,
+    # Base weights: inverse of the OVERALL person selection probability = 1/f_g
+    # (constant within each age group because design is self-weighting)
+    base_wt_18to34   = 1 / f1,
+    base_wt_35to49   = 1 / f2,
+    base_wt_50to64   = 1 / f3,
+    base_wt_65plus   = 1 / f4
+  )
+
+allocate_integer <- function(expected, target_total) {
+  target_total <- as.integer(round(target_total))   # strip name, ensure integer
+  base         <- floor(expected)
+  remainder    <- target_total - sum(base)
+  if (remainder > 0) {
+    # Add 1 to the units with the largest fractional parts
+    add_idx       <- order(expected - base, decreasing = TRUE)[seq_len(remainder)]
+    base[add_idx] <- base[add_idx] + 1
+  } else if (remainder < 0) {
+    # Subtract 1 from the units with the smallest fractional parts
+    sub_idx       <- order(expected - base, decreasing = FALSE)[seq_len(abs(remainder))]
+    base[sub_idx] <- base[sub_idx] - 1
+  }
+  base
+}
+
+target_selected_18to34 <- resp_targets["18-34"] / resp_rates["18-34"]
+target_selected_35to49 <- resp_targets["35-49"] / resp_rates["35-49"]
+target_selected_50to64 <- resp_targets["50-64"] / resp_rates["50-64"]
+target_selected_65plus <- resp_targets["65+"]   / resp_rates["65+"]
+
+sample_bgs <- sample_bgs |>
+  mutate(
+    # Proportional share of each domain target allocated to each BG,
+    # based on the BG's share of the total domain workload across all BGs.
+    # These are the correct inputs to the largest-remainder integer allocation.
+    prop_18to34 = listed_18to34 / sum(listed_18to34) * as.integer(round(target_selected_18to34)),
+    prop_35to49 = listed_35to49 / sum(listed_35to49) * as.integer(round(target_selected_35to49)),
+    prop_50to64 = listed_50to64 / sum(listed_50to64) * as.integer(round(target_selected_50to64)),
+    prop_65plus = listed_65plus / sum(listed_65plus) * as.integer(round(target_selected_65plus)),
+    select_n_18to34 = allocate_integer(prop_18to34, target_selected_18to34),
+    select_n_35to49 = allocate_integer(prop_35to49, target_selected_35to49),
+    select_n_50to64 = allocate_integer(prop_50to64, target_selected_50to64),
+    select_n_65plus = allocate_integer(prop_65plus, target_selected_65plus),
+    expected_comp_from_select_18to34 = select_n_18to34 * resp_rates["18-34"],
+    expected_comp_from_select_35to49 = select_n_35to49 * resp_rates["35-49"],
+    expected_comp_from_select_50to64 = select_n_50to64 * resp_rates["50-64"],
+    expected_comp_from_select_65plus = select_n_65plus * resp_rates["65+"],
+    total_selected                   = select_n_18to34 + select_n_35to49 +
+                                       select_n_50to64 + select_n_65plus,
+    expected_total_comp_from_select  = expected_comp_from_select_18to34 +
+                                       expected_comp_from_select_35to49 +
+                                       expected_comp_from_select_50to64 +
+                                       expected_comp_from_select_65plus
+  )
+```
+
+## Selected Units and Their Characteristics
+
+```{r selected-psus-table}
+psu_table <- sample_tracts |>
+  transmute(
+    `Tract FIPS`      = Tract,
+    Name              = str_replace(NAME, "; Wayne County; Michigan", ""),
+    `Total Pop`       = TotPerson,
+    `Adults 18+`      = Adult18plus,
+    `Composite MOS`   = CompMOS,
+    `Inclusion Prob.` = pi_tract,
+    `No. BGs`         = nBGs
+  )
+
+kbl_pub(psu_table,
+        caption = "Selected PSUs (Census Tracts) and Their Characteristics",
+        digits  = c(0, 0, 0, 0, 2, 4, 0),
+        font_size = 8)
+```
+
+## Selection Probabilities at Each Stage
+
+```{r fig-pi-vs-mos, fig.cap="Tract Inclusion Probabilities vs. Composite Measure of Size. The near-perfect linear relationship confirms that systematic PPS selection correctly assigns each tract an inclusion probability proportional to its composite MOS.", fig.height=3.2}
+ggplot(tract_frame, aes(x = CompMOS, y = pi_tract)) +
+  geom_point(color = "#2c5f8a", alpha = 0.6, size = 1.8) +
+  geom_smooth(method = "lm", se = FALSE,
+              color = "firebrick", linewidth = 0.7, linetype = "dashed") +
+  scale_x_continuous(labels = number_format(accuracy = 1)) +
+  scale_y_continuous(labels = number_format(accuracy = 0.01)) +
+  labs(x = "Composite Measure of Size",
+       y = "Tract Inclusion Probability") +
+  theme_bw(base_size = 10) +
+  theme(panel.grid.minor = element_blank())
+```
+
+For tract $i$, the first-stage inclusion probability is computed using the inclusionprobabilities() function from the R sampling package, which rescales the raw PPS probabilities to sum to exactly $n_I = 40$ while correctly assigning probability 1 to any tract whose raw probability exceeds 1 (certainty units):
+
+$$
+\pi_{1i} = \text{inclusionprobabilities}(MOS_i,\; 40), \quad \sum_i \pi_{1i} = 40.
+$$
+
+For block group $j$ within selected tract $i$, the conditional second-stage probability is:
+
+$$
+\pi_{2j|i} = \frac{MOS_{ij}}{\sum_{\ell \in i} MOS_{i\ell}},
+$$
+
+and the overall block-group probability is
+$$
+\pi_{ij}^{BG} = \pi_{1i}\,\pi_{2j|i}
+$$.
+
+For a person in age group $g$ in selected block group $j$, the within-BG sampling rate is $f_{g,ij} = f_g / \pi_{ij}^{BG}$, so the overall person probability is:
+
+$$
+\pi_{g,ij} = \pi_{ij}^{BG} \cdot f_{g,ij} = f_g,
+$$
+
+confirming that the design is self-weighting within each age group.
+
+```{r sample-probability-summary}
+prob_summary <- tibble(
+  Metric = c(
+    "Number of selected tracts",
+    "Number of selected block groups",
+    "Mean tract inclusion probability",
+    "Minimum tract inclusion probability",
+    "Maximum tract inclusion probability",
+    "Mean block-group overall inclusion probability",
+    "Expected persons approached per sampled tract",
+    "Expected completed interviews per sampled tract",
+    "Operational persons selected per sampled tract",
+    "Operational expected completed interviews per sampled tract"
+  ),
+  Value = c(
+    nrow(sample_tracts),
+    nrow(sample_bgs),
+    mean(sample_tracts$pi_tract),
+    min(sample_tracts$pi_tract),
+    max(sample_tracts$pi_tract),
+    mean(sample_bgs$pi_overall_bg),
+    mean(sample_bgs$total_listed),
+    mean(sample_bgs$expected_total_resp),
+    mean(sample_bgs$total_selected),
+    mean(sample_bgs$expected_total_comp_from_select)
+  )
+)
+
+kbl_pub(prob_summary,
+        caption = "Summary of Selection Probabilities and Workload",
+        digits  = c(0, 4))
+```
+
+## How Persons Should Be Selected from Area Listings
+
+For each sampled block group, interviewers should first prepare a complete listing of all occupied housing units and all adults aged 18+ within them, classifying each adult into one of the four age domains. Separate within-BG lists are then formed for each domain.
+
+Within each domain, persons should be selected using the integer counts shown in the sample file. These counts are derived by a largest-remainder (Hamilton method) allocation: each BG's share of the domain total workload (`listed_g`) is first expressed as a proportional share of the domain target (e.g., 714 for age 18–34), then floored to integers, with any remaining units assigned to BGs with the largest fractional parts. This ensures the integer counts sum exactly to the domain target and are distributed proportionally to the BG-level workload. Field staff within each BG may use systematic sampling with a random start or random-number assignment within each age-domain list.
+
+```{r expected-by-domain}
+expected_yields <- tibble(
+  `Age Group`                    = c("18–34", "35–49", "50–64", "65+", "Total"),
+  `Persons Selected`             = c(
+    sum(sample_bgs$select_n_18to34), sum(sample_bgs$select_n_35to49),
+    sum(sample_bgs$select_n_50to64), sum(sample_bgs$select_n_65plus),
+    sum(sample_bgs$total_selected)
+  ),
+  `Expected Completed Interviews` = c(
+    sum(sample_bgs$select_n_18to34) * resp_rates["18-34"],
+    sum(sample_bgs$select_n_35to49) * resp_rates["35-49"],
+    sum(sample_bgs$select_n_50to64) * resp_rates["50-64"],
+    sum(sample_bgs$select_n_65plus) * resp_rates["65+"],
+    sum(sample_bgs$select_n_18to34) * resp_rates["18-34"] +
+      sum(sample_bgs$select_n_35to49) * resp_rates["35-49"] +
+      sum(sample_bgs$select_n_50to64) * resp_rates["50-64"] +
+      sum(sample_bgs$select_n_65plus) * resp_rates["65+"]
+  )
+)
+
+kbl_pub(expected_yields,
+        caption = "Persons Selected and Expected Completed Interviews by Age Group",
+        digits  = c(0, 0, 1))
+```
+
+# Anticipated Precision
+
+The key precision requirement concerns the estimated proportion of Detroit adults whose main means of transportation is public transit. Under a complex sample design:
+
+$$
+Var(\hat{p}) = DEFF \times \frac{p(1-p)}{n},
+$$
+
+where $n = 1{,}000$ and $DEFF$ is the design effect. Because the design has one sampled BG per tract, within-cluster homogeneity still creates a design effect greater than 1. The table below reports anticipated precision across plausible design effects (1.2 to 1.8) and several assumed proportions.
+
+```{r precision-table}
+precision_grid <- expand_grid(
+  p    = c(0.10, 0.15, 0.20, 0.25, 0.30),
+  DEFF = c(1.2, 1.5, 1.8)
+) |>
+  mutate(
+    n    = 1000,
+    se   = sqrt(DEFF * p * (1 - p) / n),
+    moe  = 1.96 * se,
+    ci   = paste0("[", number(p - moe, accuracy = 0.001), ", ",
+                       number(p + moe, accuracy = 0.001), "]")
+  ) |>
+  transmute(`Assumed Proportion` = p, DEFF,
+            `Standard Error`     = se,
+            `Margin of Error`    = moe,
+            `95% CI`             = ci)
+
+kbl_pub(precision_grid,
+        caption = "Anticipated Precision for Estimated Proportions Under Plausible Design Effects",
+        digits  = c(0, 2, 1, 4, 4, 0),
+        font_size = 9)
+```
+
+If the true public-transit proportion is around 0.15, the margin of error ranges from approximately ±0.024 (DEFF = 1.2) to ±0.030 (DEFF = 1.8), indicating adequate citywide precision. The equal domain allocation also supports reliable age-subgroup estimates.
+
+```{r fig-precision-curves, fig.cap="Anticipated Standard Error of an Estimated Proportion by True Proportion and Design Effect (n = 1,000). Dashed vertical line marks p = 0.15, the assumed public-transit proportion. The shaded band spans DEFF = 1.2 to 1.8.", fig.height=3.2}
+p_seq <- seq(0.01, 0.60, by = 0.005)
+
+precision_ribbon <- tibble(
+  p      = p_seq,
+  se_low = sqrt(1.2 * p_seq * (1 - p_seq) / 1000),
+  se_hi  = sqrt(1.8 * p_seq * (1 - p_seq) / 1000),
+  se_mid = sqrt(1.5 * p_seq * (1 - p_seq) / 1000)
+)
+
+ggplot(precision_ribbon, aes(x = p)) +
+  geom_ribbon(aes(ymin = se_low, ymax = se_hi),
+              fill = "steelblue", alpha = 0.25) +
+  geom_line(aes(y = se_low, color = "DEFF = 1.2"), linewidth = 0.8) +
+  geom_line(aes(y = se_mid, color = "DEFF = 1.5"), linewidth = 0.8) +
+  geom_line(aes(y = se_hi,  color = "DEFF = 1.8"), linewidth = 0.8) +
+  geom_vline(xintercept = 0.15, linetype = "dashed",
+             color = "firebrick", linewidth = 0.7) +
+  annotate("text", x = 0.17, y = 0.019,
+           label = "p = 0.15\n(public transit)", size = 2.8,
+           color = "firebrick", hjust = 0) +
+  scale_color_manual(name = "Design Effect",
+                     values = c("DEFF = 1.2" = "#1a6faf",
+                                "DEFF = 1.5" = "#3a9bd5",
+                                "DEFF = 1.8" = "#78c4e8")) +
+  scale_x_continuous(labels = percent_format(accuracy = 1),
+                     breaks = seq(0, 0.6, 0.1)) +
+  scale_y_continuous(labels = number_format(accuracy = 0.001)) +
+  labs(x = "True Proportion (p)",
+       y = expression("Standard Error of " * hat(p))) +
+  theme_bw(base_size = 10) +
+  theme(legend.position  = "bottom",
+        panel.grid.minor = element_blank())
+```
+
+# Description of Weighting Plan
+
+Because the design is self-weighting within each age group, the base weight for a respondent in age group $g$ is constant within that group:
+
+$$
+w_{\text{base},g} = \frac{1}{f_g}.
+$$
+
+```{r weighting-table}
+weight_table <- tibble(
+  `Age Group`          = c("18–34", "35–49", "50–64", "65+"),
+  `Sampling Fraction`  = c(f1, f2, f3, f4),
+  `Base Weight`        = c(1/f1, 1/f2, 1/f3, 1/f4)
+)
+
+kbl_pub(weight_table,
+        caption = "Base Weights by Age Group",
+        digits  = c(0, 6, 1))
+```
+
+After data collection, a nonresponse adjustment should be applied within weighting cells defined by age group and, where feasible, geographic weighting classes (e.g., groups of sampled tracts with similar response propensities). After nonresponse adjustment, weights should be calibrated to known external population controls—at minimum, age-group-by-sex totals from the 2020 Census. If additional reliable controls are available (e.g., race/ethnicity), raking across multiple marginal distributions may further reduce nonresponse bias and improve the precision of key estimates.
+
+# Variance Estimation
+
+For design-based variance estimation, analysts should define the selected census tracts as PSUs. Because no explicit stratification is built into the present design, a conservative approach is to treat the entire sample as a single stratum with 40 PSUs. A modestly improved approach is to form variance-estimation strata by pairing adjacent sampled tracts in the sorted PPS frame order, thereby capturing some implicit geographic stratification; this yields 20 strata with 2 PSUs each.
+
+The final analysis data file should contain at minimum: (1) a final respondent weight, (2) a PSU identifier corresponding to the sampled tract FIPS code, and (3) a variance stratum variable. Analysts can then compute Taylor-series linearized standard errors or replicate-weight-based variances using standard survey software (e.g., the `survey` package in R, Stata's `svy` suite, or SAS `PROC SURVEYMEANS`). Because there is only one sampled block group per tract, the tract remains the PSU for all analyses; treating block groups as PSUs would incorrectly inflate degrees of freedom.
+
+# Maps
+
+```{r maps-prep}
+mi_tracts <- tracts(state = "MI", county = "Wayne", year = 2020) |>
+  st_as_sf() |>
+  mutate(GEOID = as.character(GEOID))
+
+detroit_map <- mi_tracts |> filter(GEOID %in% tract_frame$Tract)
+
+selected_map <- detroit_map |>
+  left_join(tract_frame |> select(Tract, selected), by = c("GEOID" = "Tract")) |>
+  mutate(selected = ifelse(is.na(selected), 0, selected),
+         status   = ifelse(selected == 1, "Selected Tracts (n=40)", "Non-Selected Tracts"))
+
+mi_bgs <- block_groups(state = "MI", county = "Wayne", year = 2020) |>
+  st_as_sf() |>
+  mutate(GEOID = as.character(GEOID))
+
+selected_bg_map <- mi_bgs |> filter(GEOID %in% sample_bgs$BlockGroup)
+
+# Centroids for bubble plot (Image 1 style)
+tract_centroids <- selected_map |>
+  st_centroid() |>
+  mutate(lon = st_coordinates(geometry)[, 1],
+         lat = st_coordinates(geometry)[, 2])
+
+bg_centroids <- selected_bg_map |>
+  st_centroid() |>
+  mutate(lon = st_coordinates(geometry)[, 1],
+         lat = st_coordinates(geometry)[, 2])
+```
+
+## The City of Detroit
+
+```{r detroit-map, fig.cap="Census Tracts in the Detroit Operational Frame. All 266 tracts meeting the minimum population threshold are shown; the 40 selected PSUs are highlighted in blue.", fig.height=4.0}
+ggplot() +
+  geom_sf(data = selected_map,
+          aes(fill = status), color = "gray50", linewidth = 0.2) +
+  scale_fill_manual(
+    values = c("Non-Selected Tracts" = "white",
+               "Selected Tracts (n=40)" = "#4472C4"),
+    name = NULL
+  ) +
+  labs(title = "Detroit Census Tracts: Operational Frame with Selected PSUs") +
+  theme_void(base_size = 9) +
+  theme(legend.position  = "bottom",
+        plot.title       = element_text(face = "bold", size = 9, hjust = 0.5))
+```
+
+## Selected Tracts and Block Groups
+
+```{r selected-map, fig.cap="Selected Sample: PSU Tracts (blue circles) and SSU Block Groups (red circles). Circle size is proportional to the composite MOS, illustrating that larger tracts are selected with higher probability under PPS. Each selected tract contains exactly one selected block group (red dot).", fig.height=4.2}
+ggplot() +
+  geom_sf(data = selected_map, fill = "gray96", color = "gray70", linewidth = 0.15) +
+  # Non-selected tract centroids — small hollow circles
+  geom_point(data = tract_centroids |> filter(status == "Non-Selected Tracts"),
+             aes(x = lon, y = lat),
+             shape = 1, color = "gray60", size = 1.8, stroke = 0.4) +
+  # Selected tract centroids — filled blue circles, size ~ MOS
+  geom_point(data = tract_centroids |> filter(status == "Selected Tracts (n=40)") |>
+               left_join(tract_frame |> select(Tract, CompMOS),
+                         by = c("GEOID" = "Tract")),
+             aes(x = lon, y = lat, size = CompMOS),
+             shape = 16, color = "#4472C4", alpha = 0.75) +
+  # Selected BG centroids — red dots
+  geom_point(data = bg_centroids,
+             aes(x = lon, y = lat),
+             shape = 16, color = "#C0392B", size = 2.0, alpha = 0.9) +
+  scale_size_continuous(range = c(3, 9), guide = "none") +
+  annotate("point", x = -Inf, y = Inf, size = 0) +  # dummy to keep axes
+  labs(title = "Selected Sample: Tracts (Blue) and Block Groups (Red)") +
+  guides(size = "none") +
+  theme_void(base_size = 9) +
+  theme(plot.title = element_text(face = "bold", size = 9, hjust = 0.5)) +
+  # Manual legend
+  annotate("point", x = -83.28, y = 42.445, size = 4,
+           shape = 16, color = "#4472C4", alpha = 0.75) +
+  annotate("text",  x = -83.26, y = 42.445, label = "Selected Tracts (n=40)",
+           size = 2.5, hjust = 0) +
+  annotate("point", x = -83.28, y = 42.437, size = 2.5,
+           shape = 16, color = "#C0392B") +
+  annotate("text",  x = -83.26, y = 42.437, label = "Selected Block Groups (n=40)",
+           size = 2.5, hjust = 0) +
+  annotate("point", x = -83.28, y = 42.429, size = 2,
+           shape = 1, color = "gray60", stroke = 0.4) +
+  annotate("text",  x = -83.26, y = 42.429, label = "Non-Selected Tracts",
+           size = 2.5, hjust = 0)
+```
+
+\newpage
+
+# Appendix
+
+## Codebook of Frame and Sample Files
+
+```{r codebook-tables}
+frame_codebook <- tibble(
+  `Variable Name` = c("Tract", "NAME", "TotHH", "TotPerson",
+                       "Age18to34", "Age35to49", "Age50to64", "Age65plus",
+                       "AgeUnder18", "Adult18plus", "CompMOS", "nBGs"),
+  Description = c(
+    "Census tract FIPS code",
+    "Tract name/geographic identifier",
+    "Total households in tract",
+    "Total persons in tract",
+    "Population aged 18–34",
+    "Population aged 35–49",
+    "Population aged 50–64",
+    "Population aged 65 and older",
+    "Population under age 18",
+    "Population aged 18 and older",
+    "Composite measure of size used for PPS selection",
+    "Number of block groups in tract"
+  )
+)
+
+sample_codebook <- tibble(
+  `Variable Name` = c(
+    "BlockGroup", "TractFIPS", "TotHH", "TotPerson", "Adult18plus",
+    "Age18to34", "Age35to49", "Age50to64", "Age65plus", "CompMOS",
+    "pi_tract", "pi_bg_given_tract", "pi_overall_bg",
+    "f_person_18to34", "f_person_35to49", "f_person_50to64", "f_person_65plus",
+    "listed_18to34", "listed_35to49", "listed_50to64", "listed_65plus", "total_listed",
+    "expected_resp_18to34", "expected_resp_35to49",
+    "expected_resp_50to64", "expected_resp_65plus", "expected_total_resp",
+    "base_wt_18to34", "base_wt_35to49", "base_wt_50to64", "base_wt_65plus",
+    "select_n_18to34", "select_n_35to49", "select_n_50to64", "select_n_65plus",
+    "expected_comp_from_select_18to34", "expected_comp_from_select_35to49",
+    "expected_comp_from_select_50to64", "expected_comp_from_select_65plus",
+    "total_selected", "expected_total_comp_from_select"
+  ),
+  Description = c(
+    "Selected block group FIPS code",
+    "Parent tract FIPS code",
+    "Total households in block group",
+    "Total persons in block group",
+    "Population aged 18 and older in block group",
+    "Population aged 18–34 in block group",
+    "Population aged 35–49 in block group",
+    "Population aged 50–64 in block group",
+    "Population aged 65+ in block group",
+    "Composite measure of size for the block group",
+    "First-stage inclusion probability for the tract",
+    "Conditional second-stage inclusion probability for the block group",
+    "Overall block-group selection probability",
+    "Person sampling rate for age 18–34",
+    "Person sampling rate for age 35–49",
+    "Person sampling rate for age 50–64",
+    "Person sampling rate for age 65+",
+    "Expected number of listed persons selected in age 18–34",
+    "Expected number of listed persons selected in age 35–49",
+    "Expected number of listed persons selected in age 50–64",
+    "Expected number of listed persons selected in age 65+",
+    "Expected total persons selected before nonresponse",
+    "Expected completed interviews in age 18–34 from fractional rates",
+    "Expected completed interviews in age 35–49 from fractional rates",
+    "Expected completed interviews in age 50–64 from fractional rates",
+    "Expected completed interviews in age 65+ from fractional rates",
+    "Expected total completed interviews from fractional rates",
+    "Base weight for persons aged 18–34",
+    "Base weight for persons aged 35–49",
+    "Base weight for persons aged 50–64",
+    "Base weight for persons aged 65+",
+    "Operational integer persons to select in age 18–34",
+    "Operational integer persons to select in age 35–49",
+    "Operational integer persons to select in age 50–64",
+    "Operational integer persons to select in age 65+",
+    "Expected completed interviews from operational 18–34 selections",
+    "Expected completed interviews from operational 35–49 selections",
+    "Expected completed interviews from operational 50–64 selections",
+    "Expected completed interviews from operational 65+ selections",
+    "Total operational persons selected in the block group",
+    "Expected total completed interviews from operational integer selections"
+  )
+)
+
+sample_codebook <- sample_codebook |>
+  mutate(`Variable Name` = gsub("_", "\\_", `Variable Name`, fixed = TRUE))
+
+kbl_pub(frame_codebook,
+        caption   = "Codebook for the Tract Frame File (FRAME1\\_NEYMAN.csv)",
+        longtable = TRUE, font_size = 9, escape = FALSE)
+
+kbl_pub(sample_codebook,
+        caption   = "Codebook for the Sample File (SAMPLE\\_NEYMAN.csv)",
+        longtable = TRUE, font_size = 8, escape = FALSE)
+
+
+```
+
+## Listing of Sample PSUs and SSUs with Selection Probabilities and Sampling Rates
+
+```{r appendix-sample-listing}
+sample_listing <- sample_bgs |>
+  transmute(
+    Tract = TractFIPS, BlockGroup,
+    TotHH, TotPerson, Adult18plus,
+    Age18to34, Age35to49, Age50to64, Age65plus,
+    CompMOS,
+    pi_tract, pi_bg_given_tract, pi_overall_bg,
+    f_person_18to34, f_person_35to49, f_person_50to64, f_person_65plus,
+    select_n_18to34, select_n_35to49, select_n_50to64, select_n_65plus
+  )
+
+kbl_pub(sample_listing,
+        caption   = "Selected Tracts and Block Groups with Selection Probabilities and Person Sampling Rates",
+        digits    = 4,
+        longtable = TRUE,
+        font_size = 7)
+```
+
+## Disclosure of AI Use
+
+Two generative AI tools were used to assist with this project:
+
+**Claude (Anthropic, claude-sonnet-4-5)** was used for: (1) editing and improving the clarity of narrative sections; (2) converting the script from R Markdown to Quarto format and aligning the YAML header with project format requirements; (3) refining table formatting and code organization; and (4) tightening prose to meet the 10–15 page body limit.
+
+**ChatGPT (OpenAI, GPT-4o)** was used for: (1) brainstorming the structure of the composite MOS formula explanation; (2) drafting an initial version of the weighting plan section; and (3) checking the logic of the self-weighting proof for consistency.
+
+our Team takes responsibility for all methodological decisions, formula derivations, code review, data preparation for this work.
+
+**Verbatim prompts used with Claude:**
+
+> *"Here is my .qmd script for a multi-stage area probability sample design project. Refine it to match the project requirements. I set echo to false so I could knit it into the report after running the codes. Key things to fix: report formatting (page count, spacing, sections)."*
+
+> *"Review the YAML header and make sure it is correct Quarto syntax, not R Markdown syntax. Add a proper title page separation with newpage, and make sure the Appendix starts on a new page so it clearly falls outside the 10–15 page body limit."*
+
+> *"Tighten the prose in Sections 2–7 to keep the body within the page limit. Consolidate redundant language in the weighting and variance estimation sections."*
+
+
+**Verbatim prompts used with ChatGPT:**
+
+> *"I am designing a multi-stage area probability sample for a Detroit transportation survey. I need to explain a composite measure of size that weights age groups by their required sampling fractions. Can you help me write a clear explanation for a technical report audience?"*
+
+> *"Write a weighting plan section for a survey sample design report. The design is self-weighting within each of four age groups (18–34, 35–49, 50–64, 65+), so the base weight for each respondent is the inverse of their age-group sampling fraction. After the base weight, describe nonresponse adjustment and calibration to census controls."*
+
+> *"In a multi-stage PPS design where tracts are PSUs and one block group is selected per tract, the overall person probability equals the product of the tract inclusion probability, the conditional block group probability, and the within-block-group person rate. Show that this simplifies to a constant f_g within each age group, confirming self-weighting."*
+
+## Output Files
+
+```{r write-output-files}
+frame1 <- tract_frame |>
+  select(Tract, NAME, TotHH, TotPerson, Age18to34, Age35to49,
+         Age50to64, Age65plus, AgeUnder18, Adult18plus, CompMOS, nBGs)
+
+frame2 <- bg_frame |>
+  select(BlockGroup, TractFIPS, NAME, TotHH, TotPerson,
+         Age18to34, Age35to49, Age50to64, Age65plus,
+         AgeUnder18, Adult18plus, CompMOS)
+
+sample_file <- sample_bgs |>
+  select(BlockGroup, TractFIPS, NAME, TotHH, TotPerson, Adult18plus,
+         Age18to34, Age35to49, Age50to64, Age65plus,
+         CompMOS, pi_tract, pi_bg_given_tract, pi_overall_bg,
+         f_person_18to34, f_person_35to49, f_person_50to64, f_person_65plus,
+         listed_18to34, listed_35to49, listed_50to64, listed_65plus, total_listed,
+         expected_resp_18to34, expected_resp_35to49,
+         expected_resp_50to64, expected_resp_65plus, expected_total_resp,
+         base_wt_18to34, base_wt_35to49, base_wt_50to64, base_wt_65plus,
+         select_n_18to34, select_n_35to49, select_n_50to64, select_n_65plus,
+         expected_comp_from_select_18to34, expected_comp_from_select_35to49,
+         expected_comp_from_select_50to64, expected_comp_from_select_65plus,
+         total_selected, expected_total_comp_from_select)
+
+write.csv(frame1,       glue("FRAME1_{team_name}.csv"),  row.names = FALSE)
+write.csv(frame2,       glue("FRAME2_{team_name}.csv"),  row.names = FALSE)
+write.csv(sample_file,  glue("SAMPLE_{team_name}.csv"),  row.names = FALSE)
+
+output_df <- tibble(
+  File = c(glue("FRAME1\\_{team_name}.csv"),
+           glue("FRAME2\\_{team_name}.csv"),
+           glue("SAMPLE\\_{team_name}.csv")),
+  Rows = c(nrow(frame1), nrow(frame2), nrow(sample_file))
+)
+
+kbl_pub(output_df,
+        caption = "Output Files Written by the Script",
+        digits  = c(0, 0),
+        escape  = FALSE)
+```

@@ -1,0 +1,115 @@
+---
+title: "Area Sampling Frame -- Block Group Level"
+subtitle: |
+  SURV 745 – PracTools Project  
+  Team Neyman | Detroit Transportation Security Survey
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+fontsize: 11pt
+geometry: margin=1in
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{float}
+  - \usepackage{caption}
+  - \captionsetup[table]{skip=4pt}
+  - \usepackage{fancyhdr}
+  - \pagestyle{fancy}
+  - \fancyhf{}
+  - \rfoot{\thepage}
+  - \setlength{\headheight}{14pt}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+
+df <- read.csv("FRAME2_NEYMAN.csv", colClasses = "character") |>
+  mutate(across(c(TotHH, TotPerson, Age18to34, Age35to49, Age50to64,
+                  Age65plus, AgeUnder18, Adult18plus), as.integer),
+         CompMOS = as.numeric(CompMOS))
+```
+
+# Overview
+
+This file constitutes the **second-stage (SSU) area sampling frame** for the Detroit Transportation Security Survey. It lists all census block groups associated with the eligible census tracts in the Stage 1 frame (FRAME1\_NEYMAN.csv). Block groups serve as secondary sampling units (SSUs): within each selected tract, exactly one block group is selected using systematic PPS sampling with the block-group-level composite MOS.
+
+The block-group data were obtained from the 2020 Decennial Census DHC Summary File (table P12) for Wayne County, MI. Only block groups nested within tracts that passed the Stage 1 eligibility threshold (at least 50 adults aged 18+) are included in this frame.
+
+# Summary Statistics
+
+```{r summary-stats}
+summ <- df |>
+  summarise(
+    `Number of Block Groups`        = n(),
+    `Number of Parent Tracts`       = n_distinct(TractFIPS),
+    `Total Households`              = sum(TotHH, na.rm = TRUE),
+    `Total Persons`                 = sum(TotPerson, na.rm = TRUE),
+    `Total Adults 18+`              = sum(Adult18plus, na.rm = TRUE),
+    `Mean Adults per Block Group`   = round(mean(Adult18plus, na.rm = TRUE), 1),
+    `Median Adults per Block Group` = median(Adult18plus, na.rm = TRUE),
+    `Mean Composite MOS`            = round(mean(CompMOS, na.rm = TRUE), 4),
+    `Total Composite MOS`           = round(sum(CompMOS, na.rm = TRUE), 2)
+  ) |>
+  pivot_longer(everything(), names_to = "Statistic", values_to = "Value")
+
+kbl(summ, booktabs = TRUE, linesep = "",
+    caption = "Summary Statistics for the Block Group Frame") |>
+  kable_styling(latex_options = c("hold_position"),
+                font_size = 10, full_width = FALSE, position = "center")
+```
+
+# Frame Listing
+
+```{r frame-table}
+display_df <- df |>
+  select(BlockGroup, TractFIPS, TotHH, TotPerson, Adult18plus,
+         Age18to34, Age35to49, Age50to64, Age65plus, CompMOS) |>
+  mutate(CompMOS = round(CompMOS, 4))
+
+colnames(display_df) <- c("Block Group FIPS", "Tract FIPS", "Tot. HH",
+                           "Tot. Persons", "Adults 18+",
+                           "18-34", "35-49", "50-64", "65+", "Comp. MOS")
+
+kbl(display_df, booktabs = TRUE, linesep = "", longtable = TRUE,
+    caption = "Detroit Block Group Frame (FRAME2\\_NEYMAN.csv)",
+    escape = FALSE) |>
+  kable_styling(latex_options = c("hold_position", "scale_down",
+                                   "repeat_header"),
+                font_size = 7, full_width = FALSE, position = "center") |>
+  add_header_above(c(" " = 5, "Age Group Population" = 4, " " = 1))
+```
+
+\newpage
+
+# Variable Descriptions
+
+| Variable | Description |
+|---|---|
+| Block Group FIPS | 12-digit census block group FIPS code |
+| Tract FIPS | 11-digit parent tract FIPS code (links to FRAME1\_NEYMAN.csv) |
+| Tot. HH | Total occupied housing units in the block group (2020 Census) |
+| Tot. Persons | Total resident population in the block group (2020 Census) |
+| Adults 18+ | Total civilian non-institutionalized persons aged 18 and older |
+| 18-34 | Population aged 18--34 |
+| 35-49 | Population aged 35--49 |
+| 50-64 | Population aged 50--64 |
+| 65+ | Population aged 65 and older |
+| Comp. MOS | Composite measure of size: $\sum_g f_g N_{gj}$, where $f_g$ is the domain-specific sampling fraction and $N_{gj}$ is the domain population in block group $j$ |
+
+# Notes
+
+1. **Source:** 2020 Decennial Census DHC Summary File, table P12 (Sex by Age), accessed via the `tidycensus` R package for Wayne County, MI. Block groups were matched to Detroit tract FIPS codes and filtered to retain only those nested within eligible tracts.
+
+2. **Linkage to Stage 1 frame:** Every block group in this file belongs to a tract listed in FRAME1\_NEYMAN.csv. The `Tract FIPS` column is the key for joining the two frame files.
+
+3. **Composite MOS:** The block-group-level composite MOS is used for conditional PPS selection at Stage 2 (one block group per selected tract). Within a given tract, the conditional selection probability for block group $j$ is $\pi_{2j|i} = MOS_{ij} / \sum_{\ell \in i} MOS_{i\ell}$. For tracts containing only one block group, that block group is selected with certainty ($\pi_{2j|i} = 1$).
+
+4. **Block groups with zero MOS:** If a block group has zero adults in all four age domains (e.g., a purely commercial or institutional area), its composite MOS is zero. In the sample selection code, such block groups within a multi-BG tract receive equal selection probability ($1/n_{BGs}$) as a fallback to ensure the tract can still contribute an SSU.
+
+5. **Population counts:** Age group counts are derived from P12 series variables in the DHC file and reflect the 2020 Census enumeration. They serve as proxy measures of the current eligible population for frame construction and MOS assignment only.

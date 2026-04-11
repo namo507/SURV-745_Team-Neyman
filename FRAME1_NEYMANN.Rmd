@@ -1,0 +1,116 @@
+---
+title: "Area Sampling Frame -- Census Tract Level"
+subtitle: |
+  SURV 745 – PracTools Project  
+  Team Neyman | Detroit Transportation Security Survey
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+fontsize: 11pt
+geometry: margin=1in
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{float}
+  - \usepackage{caption}
+  - \captionsetup[table]{skip=4pt}
+  - \usepackage{fancyhdr}
+  - \pagestyle{fancy}
+  - \fancyhf{}
+  - \rfoot{\thepage}
+  - \setlength{\headheight}{14pt}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+
+df <- read.csv("FRAME1_NEYMAN.csv", colClasses = "character") |>
+  mutate(across(c(TotHH, TotPerson, Age18to34, Age35to49, Age50to64,
+                  Age65plus, AgeUnder18, Adult18plus, nBGs), as.integer),
+         CompMOS = as.numeric(CompMOS))
+```
+
+# Overview
+
+This file constitutes the **first-stage (PSU) area sampling frame** for the Detroit Transportation Security Survey. It lists all census tracts in the City of Detroit that meet the minimum eligibility threshold for inclusion as primary sampling units (PSUs) in the multi-stage area probability design.
+
+The frame was constructed from two sources: (1) a list of Detroit census tract FIPS codes obtained from the City of Detroit Open Data Portal, and (2) tract-level counts from the 2020 Decennial Census Demographic and Housing Characteristics (DHC) Summary File (table P12), accessed via the `tidycensus` R package. Tracts with zero adults aged 18 and older, and tracts with fewer than 50 adults, were excluded from the operational frame as they do not constitute viable household survey PSUs.
+
+# Summary Statistics
+
+```{r summary-stats}
+summ <- df |>
+  summarise(
+    `Number of Tracts`       = n(),
+    `Total Households`       = sum(TotHH, na.rm = TRUE),
+    `Total Persons`          = sum(TotPerson, na.rm = TRUE),
+    `Total Adults 18+`       = sum(Adult18plus, na.rm = TRUE),
+    `Mean Adults per Tract`  = round(mean(Adult18plus, na.rm = TRUE), 1),
+    `Median Adults per Tract`= median(Adult18plus, na.rm = TRUE),
+    `Mean Composite MOS`     = round(mean(CompMOS, na.rm = TRUE), 4),
+    `Total Composite MOS`    = round(sum(CompMOS, na.rm = TRUE), 2)
+  ) |>
+  pivot_longer(everything(), names_to = "Statistic", values_to = "Value")
+
+kbl(summ, booktabs = TRUE, linesep = "",
+    caption = "Summary Statistics for the Tract Frame") |>
+  kable_styling(latex_options = c("hold_position"),
+                font_size = 10, full_width = FALSE, position = "center")
+```
+
+# Frame Listing
+
+```{r frame-table}
+display_df <- df |>
+  select(Tract, TotHH, TotPerson, Adult18plus,
+         Age18to34, Age35to49, Age50to64, Age65plus,
+         CompMOS, nBGs) |>
+  mutate(Tract   = as.character(Tract),
+         CompMOS = round(CompMOS, 4))
+
+colnames(display_df) <- c("Tract FIPS", "Tot. HH", "Tot. Persons",
+                           "Adults 18+", "18-34", "35-49",
+                           "50-64", "65+", "Comp. MOS", "No. BGs")
+
+kbl(display_df, booktabs = TRUE, linesep = "", longtable = TRUE,
+    caption = "Detroit Census Tract Frame (FRAME1\\_NEYMAN.csv)",
+    escape = FALSE) |>
+  kable_styling(latex_options = c("hold_position", "scale_down",
+                                   "repeat_header"),
+                font_size = 8, full_width = FALSE, position = "center") |>
+  add_header_above(c(" " = 4, "Age Group Population" = 4, " " = 2))
+```
+
+\newpage
+
+# Variable Descriptions
+
+| Variable | Description |
+|---|---|
+| Tract FIPS | 11-digit census tract FIPS code |
+| Tot. HH | Total occupied housing units in the tract (2020 Census) |
+| Tot. Persons | Total resident population in the tract (2020 Census) |
+| Adults 18+ | Total civilian non-institutionalized persons aged 18 and older |
+| 18-34 | Population aged 18--34 |
+| 35-49 | Population aged 35--49 |
+| 50-64 | Population aged 50--64 |
+| 65+ | Population aged 65 and older |
+| Comp. MOS | Composite measure of size: $\sum_g f_g N_{gi}$, where $f_g$ is the domain-specific sampling fraction and $N_{gi}$ is the domain population in tract $i$ |
+| No. BGs | Number of block groups within the tract |
+
+# Notes
+
+1. **Source:** 2020 Decennial Census DHC Summary File, table P12 (Sex by Age), accessed via the `tidycensus` R package for Wayne County, MI, and filtered to Detroit census tract FIPS codes from the City of Detroit Open Data Portal.
+
+2. **Eligibility:** Tracts with fewer than 50 adults aged 18+ were excluded from the operational frame. This removed `r nrow(read.csv("FRAME1_NEYMAN.csv")) - nrow(df)` tracts relative to the full deduplicated tract list.
+
+3. **Composite MOS:** The composite MOS is used for probability-proportional-to-size (PPS) selection at Stage 1. It is constructed to produce equal expected field workload across selected tracts while meeting the domain-specific respondent targets. Higher MOS values indicate tracts with larger effective sampling burden under the age-differentiated design.
+
+4. **Block group count:** The `No. BGs` column reflects the number of eligible block groups associated with each tract in the block-group-level frame (FRAME2\_NEYMAN.csv). Tracts with a single block group have that block group selected with certainty at Stage 2.
+
+5. **Seed:** The sample was drawn using `set.seed(-77)` 
